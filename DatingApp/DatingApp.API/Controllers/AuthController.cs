@@ -25,9 +25,11 @@ namespace DatingApp.API.Controllers
         private readonly IMapper _mapper;
         private readonly SignInManager<User> _signInManager;
         private readonly UserManager<User> _userManager;
+        private readonly IDatingRepository _repo;
         public AuthController(IConfiguration config, IMapper mapper,
-        UserManager<User> userManager, SignInManager<User> signInManager)
+        UserManager<User> userManager, SignInManager<User> signInManager, IDatingRepository repo)
         {
+            _repo = repo;
             _userManager = userManager;
             _signInManager = signInManager;
             _mapper = mapper;
@@ -39,7 +41,7 @@ namespace DatingApp.API.Controllers
         {
             var userToCreate = _mapper.Map<User>(userForRegisterDto);
 
-            var result =  await _userManager.CreateAsync(userToCreate, userForRegisterDto.Password);
+            var result = await _userManager.CreateAsync(userToCreate, userForRegisterDto.Password);
 
             var userToReturn = _mapper.Map<UserForDetailedDto>(userToCreate);
 
@@ -66,6 +68,13 @@ namespace DatingApp.API.Controllers
             {
                 var appUser = _mapper.Map<UserForListDto>(user);
 
+                if (string.IsNullOrEmpty(appUser.PhotoUrl))
+                {
+                    var userMainPhoto = await _repo.GetMainPhotoForUser(user.Id);
+                    if (userMainPhoto != null)
+                        appUser.PhotoUrl = userMainPhoto.Url;
+                }
+
                 return Ok(new
                 {
                     token = GenerateJwtToken(user).Result,
@@ -79,10 +88,10 @@ namespace DatingApp.API.Controllers
         private async Task<string> GenerateJwtToken(User user)
         {
             var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.UserName)
-            };
+                {
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new Claim(ClaimTypes.Name, user.UserName)
+                };
 
             var roles = await _userManager.GetRolesAsync(user);
 
